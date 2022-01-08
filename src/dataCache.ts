@@ -25,6 +25,8 @@ interface OHLCWithVolume {
   atr: number
   stoch_K: number
   stoch_D: number
+  dcHigh: number
+  dcLow: number
 }
 export type OHLCDataFormat = { [key: string]: OHLCWithVolume }
 

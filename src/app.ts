@@ -1,7 +1,6 @@
 // polyfill window.fetch for browsers which don't natively support it.
 import 'whatwg-fetch'
-import { lightningChart, emptyFill, Themes, ChartXY, LineSeries, OHLCSeriesTraditional, OHLCFigures, XOHLC, Point, AxisTickStrategies, emptyLine, AreaSeriesTypes, ColorRGBA, SolidFill, SolidLine, UIElementBuilders, CustomTick, UITextBox, UIOrigins, AreaSeriesPositive, UIDraggingModes, translatePoint, UIBackgrounds, FormattingFunctions, UITick, UIElement, AutoCursorModes, UILayoutBuilders, UIElementColumn } from "@arction/lcjs"
-import { relativeStrengthIndex } from '@arction/lcjs-analysis'
+import { lightningChart, emptyFill, Themes, ChartXY, LineSeries, AreaPoint, AreaRangeSeries, OHLCSeriesTraditional, OHLCFigures, XOHLC, Point, AxisTickStrategies, emptyLine, AreaSeriesTypes, ColorRGBA, SolidFill, SolidLine, UIElementBuilders, CustomTick, UITextBox, UIOrigins, AreaSeriesPositive, UIDraggingModes, translatePoint, UIBackgrounds, FormattingFunctions, UITick, UIElement, AutoCursorModes, UILayoutBuilders, UIElementColumn } from "@arction/lcjs"
 import { DataSource } from './dataSources'
 import { DataCache, DataRange, DataSourceInfo, OHLCDataFormat } from './dataCache'
 
@@ -66,16 +65,13 @@ const chartConfigOHLC = {
     /**
      * Bollinger Bands.
      */
-    bollinger20: {
+    dc: {
         show: true,
-        averagingFrameLengthDays: 14, // history data : 13 days.
+        averagingFrameLengthDays: 20, // history data : 13 days.
         averagingFrameLengthIntradayDays: 1 // intraday data : 1 day
     }
 }
-const chartConfigVolume = {
-    show: true,
-    verticalSpans: 1
-}
+
 const chartConfigStoch = {
     show: true,
     verticalSpans: 1,
@@ -117,7 +113,7 @@ domElements.get(domElementIDs.dataSearchRange3).addEventListener('change', () =>
 // #region ----- Create LCJS components ----
 
 // Dashboard
-const chartConfigs = [chartConfigOHLC, chartConfigVolume, chartConfigStoch]
+const chartConfigs = [chartConfigOHLC,  chartConfigStoch]
 const countRowIndexForChart = (chartIndex: number) => chartConfigs.reduce(
     (sum, chartConfig, i) => sum + (chartConfig.show && i < chartIndex ? chartConfig.verticalSpans : 0),
     0
@@ -144,6 +140,7 @@ let seriesEMA20: LineSeries | undefined
 let seriesEMA50: LineSeries | undefined
 let seriesEMA100: LineSeries | undefined
 let seriesEMA200: LineSeries | undefined
+let seriesDc: AreaRangeSeries | undefined
 let chartOHLCTitle: (UITextBox & UIElement) | undefined
 
 if (chartConfigOHLC.show) {
@@ -178,6 +175,13 @@ if (chartConfigOHLC.show) {
     axisX.onScaleChange((start, end) => chartOHLCTitle!.setPosition({ x: start, y: axisY.getInterval().end }))
     axisY.onScaleChange((start, end) => chartOHLCTitle!.setPosition({ x: axisX.getInterval().start, y: end }))
 	 
+    if (chartConfigOHLC.dc.show) {
+        // Create Bollinger Series.
+        seriesDc = chartOHLC.addAreaRangeSeries()
+            .setName('DC Band')
+            .setCursorInterpolationEnabled(false)
+            .setMouseInteractions(false)
+    }
     
     if (chartConfigOHLC.ema20.show) {
         // Create EMA Series.
@@ -211,6 +215,27 @@ if (chartConfigOHLC.show) {
         .setMouseInteractions(false)
 
     // Style.
+    if (seriesDc) {
+        const fill = new SolidFill({color: 
+            theme === Themes.darkGold ?
+                ColorRGBA(255, 255, 255, 13) :
+                ColorRGBA(150, 150, 150, 30)
+        })
+        const stroke = new SolidLine({
+            thickness: 2,
+            fillStyle: new SolidFill({
+                color: 
+                theme === Themes.darkGold ?
+                    ColorRGBA(66, 66, 66) :
+                    ColorRGBA(200, 200, 200)
+            })
+        })
+        seriesDc
+            .setHighFillStyle(fill)
+            .setLowFillStyle(fill)
+            .setHighStrokeStyle(stroke)
+            .setLowStrokeStyle(stroke)
+    }
     if (seriesEMA20) {
         seriesEMA20.setStrokeStyle(new SolidLine({
             thickness: 1,
@@ -259,61 +284,7 @@ if (chartConfigOHLC.show) {
 
 // #endregion
 
-// #region *** Volume Chart ***
-let chartVolume: ChartXY | undefined
-let seriesVolume: AreaSeriesPositive | undefined
-let chartVolumeTitle: UITextBox | undefined
 
-if (chartConfigVolume.show) {
-    chartVolume = dashboard.createChartXY({
-        columnIndex: 0,
-        columnSpan: 1,
-        rowIndex: countRowIndexForChart(chartConfigs.indexOf(chartConfigVolume)),
-        rowSpan: chartConfigVolume.verticalSpans
-    })
-        .setTitleFillStyle(emptyFill)
-        // This application uses a custom cursor, which requires disabling the default auto cursor.
-        .setAutoCursorMode(AutoCursorModes.disabled)
-
-    alignChartHorizontally(chartVolume)
-
-    const axisX = chartVolume.getDefaultAxisX()
-    const axisY = chartVolume.getDefaultAxisY()
-
-    // Volume data has a lot of quantity, so better use label formatting with metric units (K, M, etc.).
-    axisY.setTickStrategy(AxisTickStrategies.Numeric, (styler) => styler
-        .setFormattingFunction(FormattingFunctions.NumericUnits)
-    )
-
-    // Create custom title attached to the top of Y Axis.
-    const chartVolumeTitle = chartVolume.addUIElement(
-        UIElementBuilders.TextBox
-            .setBackground(UIBackgrounds.Rectangle),
-        {
-            x: axisX,
-            y: axisY
-        }
-    )
-        .setText('Volume')
-        .setPosition({ x: 0, y: 10 })
-        .setOrigin(UIOrigins.LeftTop)
-        .setDraggingMode(UIDraggingModes.notDraggable)
-    axisX.onScaleChange((start, end) => chartVolumeTitle.setPosition({ x: start, y: axisY.getInterval().end }))
-    axisY.onScaleChange((start, end) => chartVolumeTitle.setPosition({ x: axisX.getInterval().start, y: end }))
-
-    // Create Volume Series.
-    seriesVolume = chartVolume.addAreaSeries({
-        type: AreaSeriesTypes.Positive
-    })
-        .setName('Volume')
-        .setCursorInterpolationEnabled(false)
-        .setMouseInteractions(false)
-
-    // Add Chart Legend.
-    //const legend = chartVolume.addLegendBox().add(chartVolume)
-}
-
-// #endregion
 
 // #region *** Stoch Chart ***
 let chartStoch: ChartXY | undefined
@@ -425,7 +396,7 @@ if (chartConfigStoch.show) {
 }
 // #endregion
 
-const allCharts = [chartOHLC, chartVolume, chartStoch]
+const allCharts = [chartOHLC, chartStoch]
 const topChart = allCharts.find(chart => chart !== undefined)
 const bottomChart = allCharts.reverse().find(chart => chart !== undefined)
 
@@ -577,7 +548,6 @@ allCharts.forEach((chart, i) => {
         const dpEMA50 = seriesEMA50 && seriesEMA50.solveNearestFromScreen(mouseLocationEngine)
         const dpEMA100 = seriesEMA100 && seriesEMA100.solveNearestFromScreen(mouseLocationEngine)
         const dpEMA200 = seriesEMA200 && seriesEMA200.solveNearestFromScreen(mouseLocationEngine)
-        const dpVolume = seriesVolume && seriesVolume.solveNearestFromScreen(mouseLocationEngine)
         const dpStochk = seriesStochk && seriesStochk.solveNearestFromScreen(mouseLocationEngine)
 		const dpStochd = seriesStochd && seriesStochd.solveNearestFromScreen(mouseLocationEngine)
 		
@@ -614,11 +584,7 @@ allCharts.forEach((chart, i) => {
         } else {
             cursorValueLabels.ema200.setText('')
         }
-        if (dpVolume) {
-            cursorValueLabels.volume.setText(parseCursorValueLabelText('Volume', chartVolume.getDefaultAxisY().formatValue(dpVolume.location.y)))
-        } else {
-            cursorValueLabels.volume.setText('')
-        }
+        
         if (dpStochk) {
             cursorValueLabels.stochk.setText(parseCursorValueLabelText('Stoch K', chartStoch.getDefaultAxisY().formatValue(dpStochk.location.y)))
         } else {
@@ -667,6 +633,7 @@ const renderOHLCData = (name: string, data: OHLCDataFormat): void => {
     const ema200Values: Point[] = []
     const stochkValues: Point[] = []
     const stochdValues: Point[] = []
+    const dcValues: AreaPoint[] = []
     
     const tStart = window.performance.now()
     const dataDateTimes = Object.keys(data)
@@ -690,6 +657,8 @@ const renderOHLCData = (name: string, data: OHLCDataFormat): void => {
         const ema200 = Number(ohlcValuesStr.volume)
         const stochk = Number(ohlcValuesStr.stoch_K)
         const stochd = Number(ohlcValuesStr.stoch_D)
+        const dchigh = Number(ohlcValuesStr.dcHigh)
+        const dclow = Number(ohlcValuesStr.dcLow)
         
         xohlcValues.push([x, o, h, l, c])
         volumeValues.push({ x, y: volume })
@@ -707,6 +676,8 @@ const renderOHLCData = (name: string, data: OHLCDataFormat): void => {
         	stochkValues.push({x,y:stochk})
         if(stochd)
         	stochdValues.push({x,y:stochd})
+        if(dchigh)
+        	dcValues.push({position:x,high:dchigh,low:dclow})
         dataDates.push(date)        
     }
     const xohlcValuesLen = xohlcValues.length
@@ -738,24 +709,6 @@ const renderOHLCData = (name: string, data: OHLCDataFormat): void => {
     if (seriesEMA200) {
         seriesEMA200.clear().add(ema200Values)
     }
-    
-
-    if (seriesVolume) {
-        // To visualize Volume values as Histogram bars, map 'volumeValues' and add step values between data-points.
-        const histogramBarValues: Point[] = []
-        let prev: Point | undefined
-        for (let i = 0; i < volumeValuesLen; i++) {
-            const cur = volumeValues[i]
-            // Add step between previous value and cur value.
-            if (prev) {
-                histogramBarValues.push({ x: prev.x, y: cur.y })
-            }
-            histogramBarValues.push(cur)
-            prev = cur
-        }
-
-        seriesVolume.clear().add(histogramBarValues)
-    }
 
     if (seriesStochk) {
         seriesStochk.clear().add(stochkValues)
@@ -763,6 +716,10 @@ const renderOHLCData = (name: string, data: OHLCDataFormat): void => {
     
     if (seriesStochd) {
         seriesStochd.clear().add(stochdValues)
+    }
+    
+    if (seriesDc) {
+        seriesDc.clear().add(dcValues)
     }
 
     // Immediately fit new data to view along.
