@@ -87,7 +87,8 @@ const leftMarginPx = 60
 // #region ----- Find referenced DOM elements from 'index.html' -----
 const domElementIDs = {
     chartContainer: 'trading-chart-container',
-    dataSearchInput: 'trading-data-search-input',
+    dataSearchExchange: 'trading-data-search-exchange',
+    dataSearchSymbol: 'trading-data-search-symbol',
     dataSearchActivate: 'trading-data-search-activate',
     dataSearchRange1: 'trading-data-search-range-1',
     dataSearchRange2: 'trading-data-search-range-2',
@@ -764,14 +765,18 @@ const dataCaches: Map<string, DataCache> = new Map()
 // Define function that searches OHLC data.
 const searchData = () => {
     // Get search symbol from input field.
-    const inputField = domElements.get(domElementIDs.dataSearchInput) as HTMLInputElement
+    const inputField = domElements.get(domElementIDs.dataSearchSymbol) as HTMLInputElement
     const searchSymbol = inputField.value
+
+	const exchangeInputField = domElements.get(domElementIDs.dataSearchExchange) as HTMLInputElement
+    const searchExchange = exchangeInputField.value
 
     // Form API parameters.
     /**
      * Symbol to search.
      */
     const symbol: string = searchSymbol
+    const exchange: string = searchExchange
     // mode
     let mode: 'history' 
     
@@ -789,12 +794,12 @@ const searchData = () => {
             mode = 'history'
     }
 
-    let cached = dataCaches.get(symbol)
+    let cached = dataCaches.get(exchange+symbol)
 
    // if (!cached) {
 		console.log("Frequency - "+freq)
-        const cache = new DataCache(symbol, freq, dataSource)
-        dataCaches.set(symbol, cache)
+        const cache = new DataCache(exchange, symbol, freq, dataSource)
+        dataCaches.set(exchange+symbol, cache)
         cached = cache
     //}
     let dataPromise  = cached.getDailyData(dataRange)

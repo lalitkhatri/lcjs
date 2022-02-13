@@ -30,12 +30,12 @@ interface OHLCWithVolume {
 }
 export type OHLCDataFormat = { [key: string]: OHLCWithVolume }
 
-const fetchData = async (source: DataSourceInfo, symbol, freq, mode, dataRangeQuery) => {
+const fetchData = async (source: DataSourceInfo, exchange, symbol, freq, mode, dataRangeQuery) => {
   let dataPromise
   switch (source.source) {
     case DataSource.LocalData:
       {
-        dataPromise = localData(symbol,freq)
+        dataPromise = localData(exchange,symbol,freq)
       }
       break
     default:
@@ -45,17 +45,19 @@ const fetchData = async (source: DataSourceInfo, symbol, freq, mode, dataRangeQu
 }
 
 export class DataCache {
+  private readonly exchange: string
   private readonly symbol: string
   private readonly freq: string
   private readonly dataSource: DataSourceInfo
   private timeseriesData: OHLCDataFormat
   
   
-  constructor(symbol: string, freq: string, dataSource: DataSourceInfo) {
+  constructor(exchange: string, symbol: string, freq: string, dataSource: DataSourceInfo) {
+    this.exchange = exchange
     this.symbol = symbol
     this.freq = freq
     this.dataSource = dataSource
-    console.log(`Created DataCache for: ${symbol}`)
+    console.log(`Created DataCache for: ${exchange}/${symbol}`)
   }
 
   async getDailyData(dataRange: DataRange): Promise<OHLCDataFormat> {
@@ -63,7 +65,7 @@ export class DataCache {
       const now = new Date()
       const dataRangeTime = this.freq === 'D' ? 
       	// 1 Year
-      	2 * 365 * 24 * 60 * 60 * 1000 :
+      	1 * 365 * 24 * 60 * 60 * 1000 :
         // 5 Year.
         10 * 365 * 24 * 60 * 60 * 1000 
       const nBack = new Date(
@@ -86,7 +88,7 @@ export class DataCache {
       return data
     } else {
       // fetch and store data
-      const data = await fetchData(this.dataSource, this.symbol, this.freq, 'history', undefined)
+      const data = await fetchData(this.dataSource, this.exchange, this.symbol, this.freq, 'history', undefined)
 
       this.timeseriesData = data
       return this.getDailyData(dataRange)
